@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Customer Service Queue Management System</title>
+  <style>
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --ink: #1c2733;
+  --muted: #6b7785;
+  --line: #e2e7ee;
+  --accent: #0e6f8a;
+  --accent-soft: #e3f2f6;
+  --front: #167a55;
+  --front-soft: #e6f5ee;
+  --danger: #b4372f;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(20, 35, 50, .05), 0 4px 14px rgba(20, 35, 50, .05);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  line-height: 1.45;
+}
+
+h1, h2, p { margin: 0; }
+h2 { font-size: 1.05rem; margin-bottom: 14px; }
+h2 small { color: var(--muted); font-weight: 400; font-family: Consolas, monospace; margin-left: 6px; }
+
+/* Top bar */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 18px clamp(16px, 4vw, 40px);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand svg {
+  width: 44px; height: 44px; padding: 10px; border-radius: 12px;
+  background: var(--accent); stroke: #fff; fill: none; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.brand h1 { font-size: 1.3rem; }
+.brand p { color: var(--muted); font-size: .9rem; }
+.fifo-badge {
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: .85rem;
+  background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+}
+
+/* Layout */
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+  max-width: 1180px;
+  margin: 24px auto;
+  padding: 0 clamp(16px, 4vw, 40px);
+}
+.stats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.side, .main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px;
+}
+
+/* Stat cards */
+.stat { display: flex; flex-direction: column; gap: 6px; }
+.stat .label { color: var(--muted); font-size: .85rem; }
+.stat strong { font-size: 2rem; line-height: 1.1; }
+.stat .stat-text { font-size: 1.35rem; padding-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status { display: inline-block; width: fit-content; font-size: 1rem !important; padding: 6px 14px; border-radius: 999px; margin-top: 4px; letter-spacing: .04em; }
+.status.active { background: var(--front-soft); color: var(--front); }
+.status.empty { background: #eef0f3; color: var(--muted); }
+
+/* Form */
+label { display: block; font-size: .85rem; font-weight: 600; margin: 12px 0 5px; }
+input, select {
+  width: 100%; padding: 10px 12px; font: inherit; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px; background: #fff;
+}
+input:focus, select:focus, .btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+
+/* Buttons */
+.btn {
+  width: 100%; padding: 11px 16px; font: inherit; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
+  transition: background .15s, transform .1s;
+}
+.btn:hover { background: #f1f4f8; }
+.btn:active { transform: translateY(1px); }
+.btn.primary { margin-top: 18px; background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: #0b5c73; }
+.btn.serve { background: var(--front); border-color: var(--front); color: #fff; padding: 16px; font-size: 1.05rem; margin-bottom: 12px; }
+.btn.serve:hover { background: #126546; }
+.btn.danger { color: var(--danger); }
+.btn.danger:hover { background: #fbeceb; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Queue visualization */
+.queue-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.end-tag {
+  font-weight: 700; font-size: .85rem; letter-spacing: .06em; color: var(--accent);
+  background: var(--accent-soft); padding: 5px 14px; border-radius: 999px;
+}
+.end-tag small { font-weight: 400; letter-spacing: 0; color: var(--muted); margin-left: 6px; }
+.front-tag { color: var(--front); background: var(--front-soft); }
+.front-tag::after, .rear-tag::before { content: " ↓"; }
+.rear-tag::before { content: "↓ "; }
+.front-tag::after { content: ""; }
+
+.queue-list { list-style: none; margin: 0; padding: 0; width: 100%; max-width: 460px; }
+.queue-item { position: relative; display: flex; align-items: center; gap: 14px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: #fff; animation: enter .25s ease-out; }
+.queue-item + .queue-item { margin-top: 26px; }
+.queue-item + .queue-item::before {
+  content: "↓"; position: absolute; top: -24px; left: 50%; transform: translateX(-50%);
+  color: var(--muted); font-size: 1.1rem;
+}
+.queue-item.front { border: 2px solid var(--front); background: var(--front-soft); }
+.pos {
+  flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%;
+  background: #eef0f3; font-weight: 700;
+}
+.front .pos { background: var(--front); color: #fff; }
+.info { flex: 1; min-width: 0; }
+.info strong { display: block; }
+.info span { color: var(--muted); font-size: .88rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tags { text-align: right; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.chip { font-size: .75rem; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.wait { font-size: .75rem; color: var(--muted); }
+.front .wait { color: var(--front); font-weight: 600; }
+
+.empty-msg { color: var(--muted); text-align: center; padding: 22px 10px; border: 1px dashed var(--line); border-radius: 12px; width: 100%; max-width: 460px; }
+
+/* Next customer + served */
+.next-box strong { font-size: 1.2rem; display: block; }
+.next-box p { color: var(--muted); margin: 4px 0 10px; }
+.served-list { list-style: none; margin: 0; padding: 0; }
+.served-list li { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
+.served-list li:last-child { border-bottom: 0; }
+.served-list span { color: var(--muted); }
+.served-list .time { white-space: nowrap; font-size: .82rem; }
+.muted { color: var(--muted); }
+
+/* Toast */
+.toast {
+  position: fixed; right: 20px; bottom: 20px; max-width: 320px; padding: 12px 18px;
+  background: var(--ink); color: #fff; border-radius: 10px; box-shadow: var(--shadow);
+  opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity .2s, transform .2s;
+}
+.toast.show { opacity: 1; transform: none; }
+.toast.error { background: var(--danger); }
+
+@keyframes enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .pair { grid-template-columns: 1fr; }
+  .fifo-badge { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h13M3 12h13M3 18h13M19 8l3 4-3 4"/></svg>
+      <div>
+        <h1>Customer Service Queue</h1>
+        <p>First in, first out: the customer who joined first is served first.</p>
+      </div>
+    </div>
+    <span class="fifo-badge">FIFO Queue</span>
+  </header>
+
+  <main class="layout">
+    <!-- Dashboard cards -->
+    <section class="stats" aria-label="Dashboard">
+      <article class="card stat">
+        <span class="label">Customers waiting</span>
+        <strong id="stat-waiting">0</strong>
+      </article>
+      <article class="card stat">
+        <span class="label">Next customer</span>
+        <strong id="stat-next" class="stat-text">None</strong>
+      </article>
+      <article class="card stat">
+        <span class="label">Total served</span>
+        <strong id="stat-served">0</strong>
+      </article>
+      <article class="card stat">
+        <span class="label">Queue status</span>
+        <strong id="stat-status" class="status empty">EMPTY</strong>
+      </article>
+    </section>
+
+    <!-- Left column: add customer + controls -->
+    <aside class="side">
+      <section class="card">
+        <h2>Add customer</h2>
+        <form id="customer-form" autocomplete="off">
+          <label for="name">Customer name</label>
+          <input id="name" type="text" placeholder="e.g. Clement" required>
+
+          <label for="issue">Customer issue</label>
+          <input id="issue" type="text" placeholder="e.g. Account problem" required>
+
+          <label for="category">Category</label>
+          <select id="category">
+            <option>Billing</option>
+            <option>Technical Support</option>
+            <option>Account</option>
+            <option>Product</option>
+            <option>General</option>
+          </select>
+
+          <button type="submit" class="btn primary">Join queue</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Queue controls</h2>
+        <button id="serve-btn" class="btn serve">Serve next customer</button>
+        <div class="row">
+          <button id="demo-btn" class="btn">Load demo data</button>
+          <button id="clear-btn" class="btn danger">Clear queue</button>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Right column: queue, next customer, recently served -->
+    <section class="main">
+      <section class="card">
+        <h2>Current queue</h2>
+        <div class="queue-wrap">
+          <div class="end-tag front-tag">FRONT <small>served first</small></div>
+          <ol id="queue-list" class="queue-list" aria-live="polite"></ol>
+          <div class="end-tag rear-tag">REAR <small>new customers join here</small></div>
+        </div>
+      </section>
+
+      <div class="pair">
+        <section class="card">
+          <h2>Next customer <small>peek()</small></h2>
+          <div id="next-box" class="next-box"></div>
+        </section>
+
+        <section class="card">
+          <h2>Recently served</h2>
+          <ul id="served-list" class="served-list"></ul>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>
+/* =====================================================
+   QUEUE DATA STRUCTURE (FIFO: First In, First Out)
+   -----------------------------------------------------
+   Index 0 of the array is the FRONT of the queue.
+   The last index is the REAR of the queue.
+   Customers join at the REAR and are served from the FRONT.
+   ===================================================== */
+class Queue {
+  constructor() {
+    this.items = [];           // the array that stores the customers
+  }
+
+  // Add a customer to the REAR (end) of the queue
+  enqueue(customer) {
+    this.items.push(customer);
+  }
+
+  // Remove and return the customer at the FRONT (start) of the queue
+  // Returns null if the queue is empty
+  dequeue() {
+    if (this.isEmpty()) return null;
+    return this.items.shift();
+  }
+
+  // Look at the FRONT customer WITHOUT removing them
+  peek() {
+    if (this.isEmpty()) return null;
+    return this.items[0];
+  }
+
+  // True when nobody is waiting
+  isEmpty() {
+    return this.items.length === 0;
+  }
+
+  // Number of customers currently waiting
+  size() {
+    return this.items.length;
+  }
+
+  // Clear every customer (used by the Clear Queue button)
+  clear() {
+    this.items = [];
+  }
+
+  // Copy of the items from FRONT to REAR, used only for drawing the screen
+  toArray() {
+    return [...this.items];
+  }
+}
+
+/* =====================================================
+   APPLICATION STATE
+   ===================================================== */
+const queue = new Queue();     // the waiting line: this controls everything
+const servedList = [];         // recently served customers (newest first)
+let totalServed = 0;
+let nextId = 1;
+
+/* =====================================================
+   HELPERS
+   ===================================================== */
+const $ = (id) => document.getElementById(id);
+
+// Show a short message in the corner of the screen
+let toastTimer;
+function notify(message, isError = false) {
+  const toast = $("toast");
+  toast.textContent = message;
+  toast.className = "toast show" + (isError ? " error" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (toast.className = "toast"), 2600);
+}
+
+// Create an element with optional class and text (text is inserted safely)
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// Create a customer object and add it to the REAR of the queue
+function addCustomer(name, issue, category) {
+  const customer = { id: nextId++, name, issue, category };
+  queue.enqueue(customer);
+  return customer;
+}
+
+/* =====================================================
+   RENDERING: redraws the screen from the queue's state
+   ===================================================== */
+function render() {
+  renderStats();
+  renderQueue();
+  renderNext();
+  renderServed();
+}
+
+function renderStats() {
+  const front = queue.peek();
+  $("stat-waiting").textContent = queue.size();
+  $("stat-next").textContent = front ? front.name : "None";
+  $("stat-served").textContent = totalServed;
+
+  const status = $("stat-status");
+  status.textContent = queue.isEmpty() ? "EMPTY" : "ACTIVE";
+  status.className = "status " + (queue.isEmpty() ? "empty" : "active");
+}
+
+function renderQueue() {
+  const list = $("queue-list");
+  list.innerHTML = "";
+
+  if (queue.isEmpty()) {
+    list.appendChild(el("li", "empty-msg", "The queue is empty. Add a customer or load demo data."));
+    return;
+  }
+
+  queue.toArray().forEach((customer, index) => {
+    const li = el("li", "queue-item" + (index === 0 ? " front" : ""));
+    li.appendChild(el("div", "pos", index + 1));
+
+    const info = el("div", "info");
+    info.appendChild(el("strong", "", customer.name));
+    info.appendChild(el("span", "", customer.issue));
+    li.appendChild(info);
+
+    const tags = el("div", "tags");
+    tags.appendChild(el("span", "chip", customer.category));
+    tags.appendChild(el("span", "wait", index === 0 ? "Next to be served" : `Waiting (${index} ahead)`));
+    li.appendChild(tags);
+
+    list.appendChild(li);
+  });
+}
+
+// "Next customer" section uses peek()
+function renderNext() {
+  const box = $("next-box");
+  box.innerHTML = "";
+  const front = queue.peek();
+
+  if (!front) {
+    box.appendChild(el("p", "muted", "No customer waiting"));
+    return;
+  }
+  box.appendChild(el("strong", "", front.name));
+  box.appendChild(el("p", "", front.issue));
+  box.appendChild(el("span", "chip", front.category));
+}
+
+function renderServed() {
+  const list = $("served-list");
+  list.innerHTML = "";
+
+  if (servedList.length === 0) {
+    list.appendChild(el("li", "muted", "No customers served yet"));
+    return;
+  }
+  servedList.slice(0, 5).forEach((c) => {
+    const li = el("li");
+    const left = el("div");
+    left.appendChild(el("strong", "", c.name));
+    left.appendChild(el("span", "", " " + c.issue));
+    li.appendChild(left);
+    li.appendChild(el("span", "time", c.servedAt));
+    list.appendChild(li);
+  });
+}
+
+/* =====================================================
+   EVENTS
+   ===================================================== */
+
+// JOIN QUEUE: enqueue a new customer at the rear
+$("customer-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = $("name").value.trim();
+  const issue = $("issue").value.trim();
+  const category = $("category").value;
+  if (!name || !issue) return;
+
+  addCustomer(name, issue, category);
+  e.target.reset();
+  $("name").focus();
+  render();
+  notify(`${name} joined the queue at position ${queue.size()}.`);
+});
+
+// SERVE NEXT CUSTOMER: dequeue from the front
+$("serve-btn").addEventListener("click", () => {
+  if (queue.isEmpty()) {
+    notify("No customers are currently waiting.", true);
+    return;
+  }
+  const customer = queue.dequeue();
+  totalServed++;
+  customer.servedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  servedList.unshift(customer);
+  render();
+  notify(`Now serving: ${customer.name}`);
+});
+
+// LOAD DEMO DATA: enqueue four sample customers in order
+$("demo-btn").addEventListener("click", () => {
+  addCustomer("Clement", "Account Problem", "Account");
+  addCustomer("Ama", "Payment Problem", "Billing");
+  addCustomer("Kofi", "Internet Connection", "Technical Support");
+  addCustomer("Yaw", "Product Information", "Product");
+  render();
+  notify("Demo customers added to the queue.");
+});
+
+// CLEAR QUEUE: ask first, then empty the queue
+$("clear-btn").addEventListener("click", () => {
+  if (queue.isEmpty()) {
+    notify("The queue is already empty.", true);
+    return;
+  }
+  if (confirm("Remove all waiting customers from the queue?")) {
+    queue.clear();
+    render();
+    notify("Queue cleared.");
+  }
+});
+
+render();
+</script>
+</body>
+</html>
